@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Appium Kurulum Script'i - macOS
-# Kullanım: curl -fsSL https://raw.githubusercontent.com/karyaboyraz/install-scripts/main/appium.sh | bash
+# Kullanım: curl -fsSL https://install.karyaboyraz.stream/appium | bash
 #
 set -e
 
@@ -24,7 +24,7 @@ echo ""
 
 # OS kontrolü
 if [[ "$OSTYPE" != "darwin"* ]]; then
-    log_error "Bu script sadece macOS için. Windows için: irm https://raw.githubusercontent.com/karyaboyraz/install-scripts/main/appium.sh.ps1 | iex"
+    log_error "Bu script sadece macOS için. Windows için: irm https://install.karyaboyraz.stream/appium.ps1 | iex"
     exit 1
 fi
 
@@ -66,7 +66,6 @@ if ! command -v java &> /dev/null || ! java -version 2>&1 | grep -q "version"; t
     log_warn "Java bulunamadı, kuruluyor..."
     brew install openjdk@17
     
-    # JAVA_HOME ayarla
     JAVA_PATH="$(brew --prefix openjdk@17)"
     sudo ln -sfn "$JAVA_PATH/libexec/openjdk.jdk" /Library/Java/JavaVirtualMachines/openjdk-17.jdk
     
@@ -78,6 +77,17 @@ if ! command -v java &> /dev/null || ! java -version 2>&1 | grep -q "version"; t
     log_success "Java 17 kuruldu"
 else
     log_success "Java mevcut: $(java -version 2>&1 | head -1)"
+fi
+
+# JAVA_HOME kontrolü ve ayarı (Java zaten kurulu olsa bile)
+if [[ -z "$JAVA_HOME" ]] || ! grep -q "JAVA_HOME" ~/.zshrc 2>/dev/null; then
+    log_info "JAVA_HOME ayarlanıyor..."
+    JAVA_PATH=$(/usr/libexec/java_home 2>/dev/null)
+    if [[ -n "$JAVA_PATH" ]]; then
+        echo "export JAVA_HOME=\"$JAVA_PATH\"" >> ~/.zshrc
+        export JAVA_HOME="$JAVA_PATH"
+        log_success "JAVA_HOME ayarlandı: $JAVA_PATH"
+    fi
 fi
 
 # ============================================
@@ -93,17 +103,20 @@ if [[ -z "$ANDROID_HOME" ]] || [[ ! -d "$ANDROID_HOME" ]]; then
     mkdir -p "$ANDROID_HOME"
     
     # Environment variables
-    {
-        echo ""
-        echo "# Android SDK"
-        echo "export ANDROID_HOME=\"$ANDROID_HOME\""
-        echo "export PATH=\"\$ANDROID_HOME/cmdline-tools/latest/bin:\$ANDROID_HOME/platform-tools:\$ANDROID_HOME/emulator:\$PATH\""
-    } >> ~/.zshrc
+    if ! grep -q "ANDROID_HOME" ~/.zshrc 2>/dev/null; then
+        {
+            echo ""
+            echo "# Android SDK"
+            echo "export ANDROID_HOME=\"$ANDROID_HOME\""
+            echo "export PATH=\"\$ANDROID_HOME/cmdline-tools/latest/bin:\$ANDROID_HOME/platform-tools:\$ANDROID_HOME/emulator:\$PATH\""
+        } >> ~/.zshrc
+    fi
     
     export ANDROID_HOME="$ANDROID_HOME"
     export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
     
     # SDK bileşenlerini kur
+    log_info "Android SDK bileşenleri kuruluyor..."
     CMDLINE_TOOLS="/opt/homebrew/share/android-commandlinetools"
     if [[ -d "$CMDLINE_TOOLS" ]]; then
         yes | "$CMDLINE_TOOLS/bin/sdkmanager" --sdk_root="$ANDROID_HOME" "platform-tools" "platforms;android-34" "build-tools;34.0.0" "cmdline-tools;latest" 2>/dev/null || true
@@ -112,6 +125,12 @@ if [[ -z "$ANDROID_HOME" ]] || [[ ! -d "$ANDROID_HOME" ]]; then
     log_success "Android SDK kuruldu"
 else
     log_success "Android SDK mevcut: $ANDROID_HOME"
+    
+    # platform-tools kontrolü
+    if [[ ! -f "$ANDROID_HOME/platform-tools/adb" ]]; then
+        log_info "Android SDK bileşenleri kuruluyor..."
+        yes | sdkmanager --sdk_root="$ANDROID_HOME" "platform-tools" "platforms;android-34" "build-tools;34.0.0" 2>/dev/null || true
+    fi
 fi
 
 # ============================================
